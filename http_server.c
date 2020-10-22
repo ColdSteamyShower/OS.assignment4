@@ -12,12 +12,107 @@
 #include <errno.h>
 extern int errno;
 
+// When a client connects to server
+void *client_handler(void *arg);
+
+
+int main(int argc, char *argv[])
+{
+
+  /////////////
+  // Initialize
+  /////////////
+
+  // max number of clients to queue when listening for connection
+  const int backlog = 5;
+
+  // socket addresses
+  struct sockaddr_in  server_addr;
+  struct sockaddr_in  client_addr;
+
+  /*
+  ///// FYI: sockaddr_in is defined in <netinet/in.h> as:
+  /////
+  /////   struct sockaddr_in {
+  /////     short            sin_family;   // AF_INET
+  /////     unsigned short   sin_port;     // port number as int
+  /////     struct in_addr   sin_addr;     // address
+  /////     char             sin_zero[8];  // probably will be zero
+  /////   };
+  */
+
+  // separate thread to handle client
+  pthread_t tid;
+
+  // socket identifiers
+  int sockfd, client_sockfd;
+  int serverlen, clientlen;
+
+  /* require correct program execution */
+  if (argc != 3) {
+    printf("Usage: %s <ip-address> <port> \n", argv[0]);
+    return -1;
+  }
+
+  /* Create the server socket */
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd == -1) {
+    perror("Could not create socket");
+    return -1;
+  }
+
+  /* Define the server socket */
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = inet_addr(argv[1]);
+  server_addr.sin_port = htons(atoi(argv[2]));
+
+  /* bind our program to server socket */
+  if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
+    perror("Could not bind to socket");
+    close(sockfd);
+    return -1;
+  }
+
+
+
+  /////////////////
+  // Listening Loop
+  /////////////////
+
+  while (1) {
+
+    /* wait for client to connect */
+    listen(sockfd, backlog);
+
+    /* Accept a connection */
+    clientlen = sizeof(client_addr); // get ready to accept by knowing how many bytes we will read by
+    client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &clientlen);
+    if (client_sockfd == -1) {
+      perror("Unable to accept client connection request");
+      continue;
+    }
+
+    // Handle client on a separate thread
+    if (pthread_create(&tid, NULL, client_handler, (void *)&client_sockfd) < 0) {
+      perror("Unable to create client thread");
+      break;
+    }
+  }
+
+  /* Done with loop, remove the temp socket */
+  close(sockfd);
+
+  /* end program */
+  return 0;
+
+}
+
+// Handling the client
 void *client_handler(void *arg)
 {
-  
 
   // the contents of the index file
-  char msg[1300];
+  char msg[8096];
 
   // what we are going to write back to the client, header + msg combined
   char output[1400];
@@ -65,8 +160,8 @@ void *client_handler(void *arg)
    memcpy(&output[strlen(header)], msg, strlen(msg));
    //    output = hello + msg;
    output[strlen(output)] = '\0';
-    
-      
+
+
     write(sockfd, output, strlen(output));
 	//	printf("DD");
 
@@ -75,68 +170,5 @@ void *client_handler(void *arg)
     }
 
     close(sockfd);
-
-}
-
-int main(int argc, char *argv[]) 
-{
-
-   const int backlog = 5;
-
-   struct  sockaddr_in  server_addr;
-   struct  sockaddr_in  client_addr; 
-   pthread_t tid;
-
-   int sockfd, client_sockfd;
-   int serverlen, clientlen;
-
-
-   if (argc != 3) {
-       printf("Usage: %s <ip-address> <port> \n", argv[0]);
-       return -1;
-   }
-
-   /* Create the socket */
-   sockfd = socket(AF_INET, SOCK_STREAM, 0);
-   if (sockfd == -1) {
-       perror("Could not create socket");
-       return -1;
-   }
-
-   /* Name the socket */
-   server_addr.sin_family = AF_INET;
-   server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-   server_addr.sin_port = htons(atoi(argv[2]));
-  
-   /* bind to server socket */
-   if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
-       perror("Could not bind to socket");
-       close(sockfd);
-       return -1;
-   }
-   
-   /* wait for client to connect */
-   listen(sockfd, backlog);
-
-   while (1) {
-
-       /* Accept a connection */
-       clientlen = sizeof(client_addr);
-       client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &clientlen);
-       if (client_sockfd == -1) {
-           perror("Unable to accept client connection request");
-           continue;
-       }
-
-       if (pthread_create(&tid, NULL, client_handler, (void *)&client_sockfd) < 0) {
-           perror("Unable to create client thread");
-           break;
-       }
-
-   }
-
-   close(sockfd);
-
-   return 0;
 
 }
