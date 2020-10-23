@@ -84,6 +84,8 @@ int main(int argc, char *argv[])
     /* wait for client to connect */
     listen(sockfd, backlog);
 
+    printf("Listening for a client... \n");
+
     /* Accept a connection */
     clientlen = sizeof(client_addr); // get ready to accept by knowing how many bytes we will read by
     client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &clientlen);
@@ -111,64 +113,131 @@ int main(int argc, char *argv[])
 void *client_handler(void *arg)
 {
 
-  // the contents of the index file
-  char msg[8096];
 
-  // what we are going to write back to the client, header + msg combined
-  char output[1400];
+  /////////////
+  // Initialize
+  /////////////
+
+  // the buffer to move contents of the file over
+  char buffer[256];
+
+  //// what we are going to write back to the client, header + msg combined - NO LONGER NEEDED
+  //char output[1400];
 
   // clients HTTP request info
-  char request[80];
+  char request[128];
 
-  // a simple  HTTP response header, when you make a client by going on your  broswer to connect to ip and port, it sends a HTTP request header and body to server
-  // so server has to respond with appropriate HTTP header. without it, there would be an error. If you run date_server.c
-  // that we did during class, and make a client on your browser, it works only because the server never does
-  // the read command, it just accepts the socket connection and writes something back. In our case we need to read (i think) to get
-  // name of the file, so we must also include a header
+  // header for HTTP response
   char header[100];
+
+  // client socket
   int sockfd;
   sockfd = *(int *)arg;
 
-  // OPEN FILE //
+  // location of requested file
+  char filepath[80];
+
+  // file descriptor of file info to send
+  int inFile;
+
+
+
+  ////////////////////////
+  // Open the correct file
+  ////////////////////////
+
+
+  // Open requested file or quit//
   if (read(sockfd, request, 80) > 0) {
-    int inFile = open("index.html", O_RDONLY);  // HARD CODED, need to change this so that the client can open any file
+    printf("Request found: '%s' \n",request);///// remove for final version
 
-  // print error and exit if it fails
-   if (inFile < 0){
-     printf("Error: file:  %s not found\n", "index.html");
-     printf("Error Number %d\n", errno);
-     return 0;
-   }
-   else
-     printf("File %s succesfully found\n", "index.html");
+    ///////////////////
+    // Parsing the file
+    //
 
-   // READ FILE //
-   if(read(inFile, msg, 1300) > 0){ // HARD CODED, the index.html is about 1290 bytes long so I just made this 1300
-                                    // so we might have to make a larger buffer size, or use a while loop like in hw 1
-     msg[strlen(msg)] = '\0';
-     //   printf("%s", msg);
-   }
+    // Also made sure to notify the client if they messed up on their end
 
-   // the content length is the length of the body, aka the file length
-   sprintf(header, "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: %d\n\n", strlen(msg));
-
-   // copy header to output
-   memcpy(output, header, strlen(header));
-
-   // concatenate the body (file data) to the header.
-   // we cant just do output = header + msg  BTW, cuz output is a pointer so is header and msg. so we need to copy the data from them
-   memcpy(&output[strlen(header)], msg, strlen(msg));
-   //    output = hello + msg;
-   output[strlen(output)] = '\0';
-
-
-    write(sockfd, output, strlen(output));
-	//	printf("DD");
-
-
-
+    // parse the first argument as the command
+    char* command = strtok(request," \n\r");
+    if (strcmp(command, "GET") != 0){ // currently we only support GET
+      write(sockfd, "Command not recognized. Use: GET {file}\n", 40);
+      close(sockfd);
+      return 0;
     }
 
+    // parse next argument as the directory ///// \n\r to TRIM END OF LINE
+    char* directory = strtok(NULL, " \n\r");
+    if (directory == NULL){ // happens if there is nothing after GET command
+      printf("Directory not found\n");
+      write(sockfd, "File not specified. Use: GET {file}\n", 36);
+      close(sockfd);
+      return 0;
+    }
+
+    if (strlen(directory) == 1 && directory[0] == '/'){
+      // arguemnt was 'GET / {rest of request}' and we will use default file index.html
+
+      sprintf(filepath, "index.html", 10); // HARDCODED
+
+    } else if (directory[0] != '/'){
+      // the directory did not start with '/', incorrect!
+
+      write(sockfd, "Invalid directory, please begin with '/'\n", 41);
+      close(sockfd);
+      return 0;
+
+    } else {
+      // otherwise, read the directory and skip that first /
+      printf("Directory to use: '%s'\n", directory);  ///// remove for final commit
+      int len = strlen(directory);
+      for (int i=1 ; i < len ; i++){
+        filepath[i-1] = directory[i];
+      }
+    }
+
+    //
+    ///////////////////
+
+  // open the file
+  inFile = open(filepath, O_RDONLY);  // HARD CODED, need to change this so that the client can open any file
+
+
+  // bad request not read by server
+  } else {
+    printf("Error: Failed to read client request\n");
+    return 0;
+  }
+
+  // print error and exit if file not found
+  if (inFile < 0){
+    printf("Error: file:  '%s' not found\n", filepath);
+    printf("Error Number %d\n", errno);
     close(sockfd);
+    return 0;
+  } else
+    printf("File '%s' succesfully found\n", filepath);  ///// remove for final commit
+
+
+  //////////////////////////////////
+  // Send contents of file to client
+  //////////////////////////////////
+
+  // To avoid making the server store the entire file, we can use chunked transfer encoding to avoid declaring the content-length
+  sprintf(header, "HTTP/1.1 200 OK\nContent-Type: text/plain\nTransfer-Encoding: chunked\n\n");
+  write(sockfd, header, strlen(header));
+  printf("header sent to client \n");
+
+  int charsRead;
+  while (1) {
+    charsRead = read(inFile, buffer, sizeof(buffer));
+    if (charsRead == 0)
+      break;
+
+    write(sockfd, buffer, charsRead);
+
+    printf("Wrote chars to client: \n -------------------- %s \n --------------------", buffer); ///// remove for final commit
+  }
+
+  close(sockfd);
 
 }

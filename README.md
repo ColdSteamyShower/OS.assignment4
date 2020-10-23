@@ -4,16 +4,22 @@ i used the code from date_server and only edited the client helper method
 run the server: ./server 127.0.0.1 5001
 than open up firefox and type in 127.0.0.1:5001
 
-- i put the index file into the directory, the server is hardcoded to just open it, it reads the file and puts all the data into a char[] then I append it after the http response header.
-- writes all the data of the body (not the header) to the client (firefox)
+- This project was a bitch to learn, just because of parsing in C
+- Now uses a static header and a buffer to write multiple times, so we now use constant memory
+      - Use static header
+      - Transfer-Encoding: chunked so that the client's browser waits for </html> before the page loads
+      - We don't need to specify Content-Length because of that, so we can loop write() with a static buffer. O(1) memory!
+- Parses HTTP request:
+      - Split request by whitespace
+      - Check if firstToken is GET
+      - Check if secondToken[0] is '/' for a valid directory
+      - If length of secondToken is 1, there is only a '/' -> "index.html" as default
+      - ask server to open secondToken as a filepath
 
 ## To Do
-- read what file the client wants( idk if we are doing only index.html or if he would like to open other files).
-- check if file exists and if permissions are set
-- giving me problems when I use telnet!!! need to make it work with using GET command
-- It just prints the html line by line like a txt file but it doesn't actualy make the page look like an html page
-- maybe we have to do multiple reads and writes. like using a while loop, just need to send the header first pretty sure
-- other small stuff 
+- I'm using Docker, and external sockets are not doable. Working on getting dev tools to use a feature that might let me do this in the future. For now, test it with your browser to make sure it works
+- Add signal to main to close the socket when a user ctrl+c's the server. Currently stopping the server without closing it from telnet first will forever occupy the address/port (or until restart)
+- Check over the assignment instructions in case we missed something. And check the browser!
 
 VERY  helpful link
 https://medium.com/from-the-scratch/http-server-what-do-you-need-to-know-to-build-a-simple-http-server-from-scratch-d1ef8945e4fa
