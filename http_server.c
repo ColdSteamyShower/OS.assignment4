@@ -119,7 +119,7 @@ void *client_handler(void *arg)
   /////////////
 
   // the buffer to move contents of the file over
-  char buffer[256];
+  char buffer[2048];
 
   //// what we are going to write back to the client, header + msg combined - NO LONGER NEEDED
   //char output[1400];
@@ -222,22 +222,35 @@ void *client_handler(void *arg)
   // Send contents of file to client
   //////////////////////////////////
 
+  int charsRead = read(inFile, buffer, sizeof(buffer));
+
   // To avoid making the server store the entire file, we can use chunked transfer encoding to avoid declaring the content-length
-  sprintf(header, "HTTP/1.1 200 OK\nContent-Type: text/plain\nTransfer-Encoding: chunked\n\n");
+  sprintf(header, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n",charsRead);
   write(sockfd, header, strlen(header));
   printf("header sent to client \n");
 
+  write(sockfd, buffer, charsRead);
+
+/*
   int charsRead;
   while (1) {
     charsRead = read(inFile, buffer, sizeof(buffer));
-    if (charsRead == 0)
+    if (charsRead == 0){
+      write(sockfd, "0\r\n\r\n", 7);
       break;
+    }
+      
 
+    char chunkLen[8];
+    write(sockfd, "\r\n", 2);
+    sprintf(chunkLen,"%x",charsRead);
+    write(sockfd, chunkLen, strlen(chunkLen));
+    write(sockfd, "\r\n", 2);
     write(sockfd, buffer, charsRead);
 
-    printf("Wrote chars to client: \n -------------------- %s \n --------------------", buffer); ///// remove for final commit
+    printf("Wrote chars to client(size %d):\n-------------------- \n%.*s\n --------------------\n", charsRead, charsRead, buffer); ///// remove for final commit
   }
-
+*/
   close(sockfd);
 
 }
