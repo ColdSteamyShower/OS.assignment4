@@ -1,10 +1,10 @@
 # OS_Assignment4
 
 i used the code from date_server and only edited the client helper method
-run the server: ./server 127.0.0.1 5001
+run the server: ./runServer 127.0.0.1 5001
 than open up firefox and type in 127.0.0.1:5001
 
-- This project was a bitch to learn, just because of parsing in C
+
 - Now uses a static header and a buffer to write multiple times, so we now use constant memory
       - Use static header
       - Transfer-Encoding: chunked so that the client's browser waits for </html> before the page loads
